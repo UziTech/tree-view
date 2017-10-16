@@ -1154,6 +1154,27 @@ describe "TreeView", ->
             expect(child).not.toHaveClass 'expanded'
           expect(treeView.roots[0]).toHaveClass 'expanded'
 
+    describe "tree-view:collapse-all", ->
+      expandAll = ->
+        for root in treeView.roots
+          root.expand(true)
+          children = root1.querySelectorAll('.directory')
+          for child in children
+            expect(child).toHaveClass 'expanded'
+          expect(root).toHaveClass 'expanded'
+
+      checkAllCollapsed = ->
+        for root in treeView.roots
+          children = root1.querySelectorAll('.directory')
+          for child in children
+            expect(child).not.toHaveClass 'expanded'
+          expect(root).not.toHaveClass 'expanded'
+
+      it "collapses all the project directories recursively", ->
+        expandAll()
+        atom.commands.dispatch(treeView.element, 'tree-view:collapse-all')
+        checkAllCollapsed()
+
     describe "tree-view:open-selected-entry", ->
       describe "when a file is selected", ->
         it "opens the file in the editor and focuses it", ->
@@ -2502,8 +2523,7 @@ describe "TreeView", ->
         treeView.focus()
 
         spyOn(shell, 'moveItemToTrash').andReturn(false)
-        spyOn(atom, 'confirm').andCallFake (dialog) ->
-          dialog.buttons["Move to Trash"]()
+        spyOn(atom, 'confirm').andCallFake (dialog) -> dialog.buttons["Move to Trash"]()
 
         atom.commands.dispatch(treeView.element, 'tree-view:remove')
 
@@ -2526,7 +2546,7 @@ describe "TreeView", ->
         expect(atom.notifications.getNotifications().length).toBe 0
 
       describe "when a directory is removed", ->
-        it "closes editors with files belonging to the removed folder", ->
+        it "closes editors with filepaths belonging to the removed folder", ->
           jasmine.attachToDOM(workspaceElement)
 
           waitForWorkspaceOpenEvent ->
@@ -2536,17 +2556,68 @@ describe "TreeView", ->
             atom.workspace.open(filePath3)
 
           runs ->
-            openFilePaths = atom.workspace.getTextEditors().map((e) -> e.getPath())
+            openFilePaths = atom.workspace.getTextEditors().map((editor) -> editor.getPath())
             expect(openFilePaths).toEqual([filePath2, filePath3])
             dirView2.dispatchEvent(new MouseEvent('click', {bubbles: true, detail: 1}))
             treeView.focus()
 
-            spyOn(atom, 'confirm').andCallFake (dialog) ->
-              dialog.buttons["Move to Trash"]()
+            spyOn(atom, 'confirm').andCallFake (dialog) -> dialog.buttons["Move to Trash"]()
 
             atom.commands.dispatch(treeView.element, 'tree-view:remove')
-            openFilePaths = (editor.getPath() for editor in atom.workspace.getTextEditors())
+            openFilePaths = atom.workspace.getTextEditors().map((editor) -> editor.getPath())
             expect(openFilePaths).toEqual([])
+
+        it "does not close modified editors with filepaths belonging to the removed folder", ->
+          jasmine.attachToDOM(workspaceElement)
+
+          waitForWorkspaceOpenEvent ->
+            atom.workspace.open(filePath2)
+
+          waitForWorkspaceOpenEvent ->
+            atom.workspace.open(filePath3)
+
+          runs ->
+            openFilePaths = atom.workspace.getTextEditors().map((editor) -> editor.getPath())
+            expect(openFilePaths).toEqual([filePath2, filePath3])
+
+            atom.workspace.getActiveTextEditor().setText('MODIFIED')
+            dirView2.dispatchEvent(new MouseEvent('click', {bubbles: true, detail: 1}))
+            treeView.focus()
+
+            spyOn(atom, 'confirm').andCallFake (dialog) -> dialog.buttons["Move to Trash"]()
+
+            atom.commands.dispatch(treeView.element, 'tree-view:remove')
+            openFilePaths = atom.workspace.getTextEditors().map((editor) -> editor.getPath())
+            expect(openFilePaths).toEqual([filePath3])
+
+        it "does not close editors with filepaths belonging to a folder that starts with the removed folder", ->
+          dirPath20 = path.join(rootDirPath, 'test-dir20')
+          filePath20 = path.join(dirPath20, 'test-file20.txt')
+          fs.makeTreeSync(dirPath20)
+          fs.writeFileSync(filePath20, "doesn't matter 20")
+
+          jasmine.attachToDOM(workspaceElement)
+
+          waitForWorkspaceOpenEvent ->
+            atom.workspace.open(filePath2)
+
+          waitForWorkspaceOpenEvent ->
+            atom.workspace.open(filePath3)
+
+          waitForWorkspaceOpenEvent ->
+            atom.workspace.open(filePath20)
+
+          runs ->
+            openFilePaths = atom.workspace.getTextEditors().map((editor) -> editor.getPath())
+            expect(openFilePaths).toEqual([filePath2, filePath3, filePath20])
+            dirView2.dispatchEvent(new MouseEvent('click', {bubbles: true, detail: 1}))
+            treeView.focus()
+
+            spyOn(atom, 'confirm').andCallFake (dialog) -> dialog.buttons["Move to Trash"]()
+
+            atom.commands.dispatch(treeView.element, 'tree-view:remove')
+            openFilePaths = atom.workspace.getTextEditors().map((editor) -> editor.getPath())
+            expect(openFilePaths).toEqual([filePath20])
 
         it "focuses the directory's parent folder", ->
           jasmine.attachToDOM(workspaceElement)
@@ -2554,8 +2625,7 @@ describe "TreeView", ->
           dirView2.dispatchEvent(new MouseEvent('click', {bubbles: true, detail: 1}))
           treeView.focus()
 
-          spyOn(atom, 'confirm').andCallFake (dialog) ->
-            dialog.buttons["Move to Trash"]()
+          spyOn(atom, 'confirm').andCallFake (dialog) -> dialog.buttons["Move to Trash"]()
 
           atom.commands.dispatch(treeView.element, 'tree-view:remove')
           expect(root1).toHaveClass('selected')
@@ -2568,17 +2638,56 @@ describe "TreeView", ->
             atom.workspace.open(filePath2)
 
           runs ->
-            openFilePaths = atom.workspace.getTextEditors().map((e) -> e.getPath())
+            openFilePaths = atom.workspace.getTextEditors().map((editor) -> editor.getPath())
             expect(openFilePaths).toEqual([filePath2])
             fileView2.dispatchEvent(new MouseEvent('click', {bubbles: true, detail: 1}))
             treeView.focus()
 
-            spyOn(atom, 'confirm').andCallFake (dialog) ->
-              dialog.buttons["Move to Trash"]()
+            spyOn(atom, 'confirm').andCallFake (dialog) -> dialog.buttons["Move to Trash"]()
 
             atom.commands.dispatch(treeView.element, 'tree-view:remove')
-            openFilePaths = (editor.getPath() for editor in atom.workspace.getTextEditors())
+            openFilePaths = atom.workspace.getTextEditors().map((editor) -> editor.getPath())
             expect(openFilePaths).toEqual([])
+
+        it "does not close editors that have been modified", ->
+          jasmine.attachToDOM(workspaceElement)
+
+          waitForWorkspaceOpenEvent ->
+            atom.workspace.open(filePath2)
+
+          runs ->
+            openFilePaths = atom.workspace.getTextEditors().map((editor) -> editor.getPath())
+            expect(openFilePaths).toEqual([filePath2])
+
+            atom.workspace.getActiveTextEditor().setText('MODIFIED')
+            fileView2.dispatchEvent(new MouseEvent('click', {bubbles: true, detail: 1}))
+            treeView.focus()
+
+            spyOn(atom, 'confirm').andCallFake (dialog) -> dialog.buttons["Move to Trash"]()
+
+            atom.commands.dispatch(treeView.element, 'tree-view:remove')
+            openFilePaths = atom.workspace.getTextEditors().map((editor) -> editor.getPath())
+            expect(openFilePaths).toEqual([filePath2])
+
+        it "does not close editors with filepaths that begin with the removed file", ->
+          filePath2Copy = path.join(dirPath2, 'test-file2.txt0')
+          fs.writeFileSync(filePath2Copy, "doesn't matter 2 copy")
+          jasmine.attachToDOM(workspaceElement)
+
+          waitForWorkspaceOpenEvent ->
+            atom.workspace.open(filePath2Copy)
+
+          runs ->
+            openFilePaths = atom.workspace.getTextEditors().map((editor) -> editor.getPath())
+            expect(openFilePaths).toEqual([filePath2Copy])
+            fileView2.dispatchEvent(new MouseEvent('click', {bubbles: true, detail: 1}))
+            treeView.focus()
+
+            spyOn(atom, 'confirm').andCallFake (dialog) -> dialog.buttons["Move to Trash"]()
+
+            atom.commands.dispatch(treeView.element, 'tree-view:remove')
+            openFilePaths = atom.workspace.getTextEditors().map((editor) -> editor.getPath())
+            expect(openFilePaths).toEqual([filePath2Copy])
 
         it "focuses the file's parent folder", ->
           jasmine.attachToDOM(workspaceElement)
@@ -2587,8 +2696,7 @@ describe "TreeView", ->
           treeView.focus()
 
           runs ->
-            spyOn(atom, 'confirm').andCallFake (dialog) ->
-              dialog.buttons["Move to Trash"]()
+            spyOn(atom, 'confirm').andCallFake (dialog) -> dialog.buttons["Move to Trash"]()
 
             atom.commands.dispatch(treeView.element, 'tree-view:remove')
             expect(dirView2).toHaveClass('selected')
@@ -2604,8 +2712,7 @@ describe "TreeView", ->
           dirView.dispatchEvent(new MouseEvent('mousedown', {bubbles: true, metaKey: true}))
           treeView.focus()
 
-          spyOn(atom, 'confirm').andCallFake (dialog) ->
-            dialog.buttons["Move to Trash"]()
+          spyOn(atom, 'confirm').andCallFake (dialog) -> dialog.buttons["Move to Trash"]()
 
           atom.commands.dispatch(treeView.element, 'tree-view:remove')
           expect(atom.notifications.getNotifications().length).toBe 0
@@ -2617,8 +2724,7 @@ describe "TreeView", ->
           fileView2.dispatchEvent(new MouseEvent('mousedown', {bubbles: true, metaKey: true}))
           treeView.focus()
 
-          spyOn(atom, 'confirm').andCallFake (dialog) ->
-            dialog.buttons["Move to Trash"]()
+          spyOn(atom, 'confirm').andCallFake (dialog) -> dialog.buttons["Move to Trash"]()
 
           atom.commands.dispatch(treeView.element, 'tree-view:remove')
           expect(root1).toHaveClass('selected')
@@ -2987,7 +3093,7 @@ describe "TreeView", ->
           callback = jasmine.createSpy("onEntryDeleted")
           treeView.onEntryDeleted(callback)
 
-          deletedPath = treeView.selectedEntry().getPath()
+          pathToDelete = treeView.selectedEntry().getPath()
           expect(treeView.selectedEntry().getPath()).toContain(path.join('dir2', 'new2'))
           dirView = findDirectoryContainingText(treeView.roots[0], 'dir2')
           expect(dirView).not.toBeNull()
@@ -2996,7 +3102,7 @@ describe "TreeView", ->
             dialog.buttons["Move to Trash"]()
           atom.commands.dispatch(treeView.element, 'tree-view:remove')
           expect(dirView.directory.updateStatus).toHaveBeenCalled()
-          expect(callback).toHaveBeenCalledWith({path: deletedPath})
+          expect(callback).toHaveBeenCalledWith({pathToDelete})
 
     describe "on #darwin, when the project is a symbolic link to the repository root", ->
       beforeEach ->
