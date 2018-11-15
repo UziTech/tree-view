@@ -10,11 +10,11 @@
   },
   "private": true,
   "dependencies": {
-    "fs-plus": "^3.0.0",
-    "minimatch": "~0.3.0",
-    "pathwatcher": "^8.0.0",
     "@atom/temp": "~0.8.4",
-    "underscore-plus": "^1.0.0"
+    "fs-plus": "^3.0.2",
+    "minimatch": "^3.0.4",
+    "pathwatcher": "^8.0.2",
+    "underscore-plus": "^1.6.8"
   },
   "devDependencies": {
     "coffeelint": "^1.9.7",
